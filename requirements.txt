@@ -1,0 +1,9 @@
+numpy
+pandas
+matplotlib
+torch
+gym
+opencv-python
+pyautogui
+keyboard
+pygame
