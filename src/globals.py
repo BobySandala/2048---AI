@@ -4,7 +4,10 @@ from . import globals
 from . import GeneticAI
 from . import HeurisiticAI
 from . import button as ButtonModule
+from multiprocessing import Process, Queue
 import os
+
+queue = Queue()
 
 screen = None
 font = None

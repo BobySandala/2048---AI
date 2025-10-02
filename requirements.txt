@@ -7,3 +7,4 @@ opencv-python
 pyautogui
 keyboard
 pygame
+multiprocessing

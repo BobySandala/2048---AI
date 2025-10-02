@@ -1,9 +1,13 @@
-from src.HeurisiticAI import HeuristicAI
-from src.game import Game2048
+from .HeurisiticAI import HeuristicAI
+from .game import Game2048
 import numpy as np
 import random
-
+from . import globals
+from . import read_write_json
+from multiprocessing import Process, Queue
 #  [0.7864211  0.57165049 0.33741794]
+
+progress = 0
 
 class GeneticAI:
     def __init__(self, population_size=50, mutation_rate=0.1, generations=50, number_of_games=5):
@@ -13,10 +17,15 @@ class GeneticAI:
         # starts with random weights for each heuristic
         self.population = [np.random.rand(3) for _ in range(population_size)]  # random set of 3 weights between 0 and 1
         self.number_of_games = number_of_games
+        self.total_steps = generations * population_size * number_of_games
+        self.current_step = 0
 
-    def fitness(self, weights):
+    def fitness(self, weights, queue):
         scores = []
         for _ in range(self.number_of_games):  # average over 5 games
+            self.current_step += 1
+            prog = self.current_step / self.total_steps
+            queue.put({"progress": prog})
             Game = Game2048()
             ai = HeuristicAI(Game, weights=weights)
             while True:
@@ -29,11 +38,11 @@ class GeneticAI:
         return np.mean(scores)
     
 
-    def evolve(self):
+    def evolve(self, queue):
         best_weights = []
         best_fitness = -1
         for gen in range(self.generations):
-            fitnesses = [self.fitness(weights) for weights in self.population]
+            fitnesses = [self.fitness(weights, queue) for weights in self.population]
             ranked = sorted(zip(fitnesses, self.population), reverse=True)
             best = [w for _, w in ranked[:self.population_size // 2]]  # select top half
 
@@ -48,7 +57,7 @@ class GeneticAI:
             print(f"Generation {gen+1}, Best fitness: {ranked[0][0]}, Weights: {ranked[0][1]}, Best: {best}")
             best_weights = ranked[0][1] if ranked[0][0] > best_fitness else best_weights
             best_fitness = max(best_fitness, ranked[0][0])
-        return best_weights
+        return best_weights, best_fitness
 
     def crossover(self, parent1, parent2):
         alpha = np.random.rand()
@@ -59,14 +68,29 @@ class GeneticAI:
             i = np.random.randint(len(weights))
             weights[i] += np.random.normal(0, 0.1)
         return weights
-            
-def start_genetic_ai(population_size=50, generations=100):
+
+
+
+def start_genetic_ai(queue, population_size=50, generations=100, games=5):
     if population_size < 4:
         raise ValueError("Population size must be at least 4.")
-    ga = GeneticAI(population_size=population_size, generations=generations)
-    best_weights = ga.evolve()
+    print("Started")
+    ga = GeneticAI(population_size=population_size, generations=generations, number_of_games=games)
+    best_weights, best_fitness = ga.evolve(queue)
     print("Best weights found:", best_weights)
+    save_to_json(best_weights)
+    queue.put({"progress": -1})
+
+    read_write_json.save_value("best_score_genetic", best_fitness)
     return best_weights
 
+def save_to_json(weights):
+    read_write_json.save_value("genetic_ai_weights_w1", weights[0])
+    read_write_json.save_value("genetic_ai_weights_w2", weights[1])
+    read_write_json.save_value("genetic_ai_weights_w3", weights[2])
+    print("Saved to data.json")
+
 if __name__ == "__main__":
-    start_genetic_ai(population_size=5, generations=5)
+    result = start_genetic_ai(population_size=5, generations=5)
+
+    print("Saved to data.json")

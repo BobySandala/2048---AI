@@ -14,6 +14,13 @@ class HeuristicAI:
             'monotonicity': weights[2],
         }
 
+    def set_weights(self, w1, w2, w3):
+        self.weights = {
+            'empty_tiles': w1,
+            'max_tile_in_corner': w2,
+            'monotonicity': w3
+        }
+        
     def max_tile_in_corner(self, board):
         max_tile = board.max()
         corners = [board[0,0], board[0,-1], board[-1,0], board[-1,-1]]  # top-left, top-right, bottom-left, bottom-right
