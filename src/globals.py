@@ -7,7 +7,10 @@ from . import button as ButtonModule
 from multiprocessing import Process, Queue
 import os
 
+input_q = Queue()
+output_q = Queue()
 queue = Queue()
+
 
 screen = None
 font = None

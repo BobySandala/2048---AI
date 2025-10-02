@@ -6,9 +6,9 @@ import keyboard
 from typing import Dict, Tuple
 
 class Game2048:
-    def __init__(self, size=4):
+    def __init__(self, board=np.zeros((4, 4), dtype=int), size=4):
         self.size = size
-        self.board = np.zeros((size, size), dtype=int)
+        self.board = board
         self.score = 0
         self.reset()
 
@@ -17,6 +17,9 @@ class Game2048:
         self.tile_offset = 5
         self.tile_map_pos = (50, 150)
         self.moves = {}  # mapping of tile movements for animation
+
+    def get_board(self):
+        return self.board
 
     def reset(self):
         self.board[:] = 0
@@ -120,6 +123,8 @@ class Game2048:
 
         return final_moves
 
+    def set_new_board_with_anim(self, new_board, direction):
+        self.moves = self.calc_moves(self.board, new_board, direction)
 
     def move(self, direction):
         """

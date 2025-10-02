@@ -1,6 +1,7 @@
-import pygame
 import src.globals as globals
 import os
+import numpy as np
+import pygame
 
 if __name__ == "__main__":
     pygame.init()
@@ -17,7 +18,7 @@ if __name__ == "__main__":
     globals.user_input = False
     globals.current_window = 0
 
-    globals.Game = globals.game.Game2048()
+    globals.Game = globals.game.Game2048(board=np.zeros((4, 4), dtype=int), size=4)
     globals.ai = globals.HeurisiticAI.HeuristicAI(globals.Game)
 
     import src.UI as UIModule

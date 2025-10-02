@@ -79,10 +79,7 @@ def quit_game():
 def play_game():
     global current_window
     current_window = 1
-    w1 = read_write_json.load_value("genetic_ai_weights_w1")
-    w2 = read_write_json.load_value("genetic_ai_weights_w2")
-    w3 = read_write_json.load_value("genetic_ai_weights_w3")
-    globals.ai.set_weights(w1, w2, w3)
+    globals.input_q.put((globals.Game.board, globals.Game.score))
     print("Starting game with Heuristic AI...")
 
 def train_genetic_ai_ui():
@@ -185,7 +182,7 @@ def genetic_ai_train_UI():
     if train_ui_stage == 0:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                globals.running = False
             for btn in train_ai_buttons:
                 btn.handle_event(event)
             for weight_input_box in weight_input_boxes:
@@ -204,6 +201,9 @@ def genetic_ai_train_UI():
         globals.screen.blit(population_text, (50, 220))
         globals.screen.blit(games_text, (50, 290))
     if train_ui_stage == 1:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                globals.running = False
         training_text = globals.font.render("Training in progress...", True, (255, 127, 80))
         globals.screen.blit(training_text, (50, 250))
         if not globals.queue.empty():
@@ -216,11 +216,10 @@ def genetic_ai_train_UI():
             train_ui_stage = 2
             p.join()
 
-            
     if train_ui_stage == 2:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                globals.running = False
             for btn in after_train_buttons:
                 btn.handle_event(event)
         # draw buttons
@@ -235,65 +234,109 @@ def genetic_ai_train_UI():
 
     pygame.display.flip()
 
+import queue  # standard library queue for Empty exception
+
+def ai_worker(input_q, output_q):
+    w1 = read_write_json.load_value("genetic_ai_weights_w1")
+    w2 = read_write_json.load_value("genetic_ai_weights_w2")
+    w3 = read_write_json.load_value("genetic_ai_weights_w3")
+
+    Game = game.Game2048()
+    ai = HeurisiticAI.HeuristicAI(Game)
+    ai.set_weights(w1, w2, w3)
+
+    while True:
+        try:
+            board, score = input_q.get(timeout=0.1)  # wait max 0.1s
+            if score == -1:
+                break
+        except queue.Empty:
+            continue  # loop again, check input later
+
+        if board is None:
+            print("no board received")
+            break
+
+        Game.board = board
+        Game.score = score
+        move = ai.get_best_move()
+        output_q.put(move)
+
+
+screenshot = None
+game_over = False
+ai_process = None
 
 def draw_UI():
-    global current_window, buttons, game
+    global current_window, buttons, screenshot, game_over, ai_process
+    globals.screen.fill((251,249,215))  # background
+
+    events = pygame.event.get()
+    event = None
+    for event in events:
+        if event.type == pygame.QUIT:
+            globals.running = False
+            globals.input_q.put((globals.Game.board, -1))
+        if event.type == pygame.KEYDOWN:
+            if event.key in globals.key_map:
+                action = globals.key_map[event.key]
+    if events:
+        event = events[len(events)-1]
+
     if current_window == 0:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            for btn in buttons:
+        for btn in buttons:
+            # handle button events and draw them
+            btn.draw(globals.screen)
+            if event:
                 btn.handle_event(event)
 
-        globals.screen.fill((251,249,215))  # background
-
-        # draw buttons
-        for btn in buttons:
-            btn.draw(globals.screen)
-
     if current_window == 1:
+        if ai_process is None or not ai_process.is_alive():
+            ai_process = Process(target=ai_worker, args=(globals.input_q, globals.output_q))
+            ai_process.start()
+            print("AI Created")
+        
         action = None
-        if globals.user_input:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False  # allows window to close
-                elif event.type == pygame.KEYDOWN:
-                    if event.key in globals.key_map:
-                        action = globals.key_map[event.key]
-        else:
-            action = globals.ai.get_best_move()
+        if not globals.output_q.empty():
+            action = globals.output_q.get()
 
         if action is not None:
             changed, reward, done = globals.Game.move(action)
             if changed:
+                globals.input_q.put((globals.Game.board, globals.Game.score))
                 print(f"Action {action}, reward {reward}")
-                print(game)
 
             if done:  # game over
                 screenshot = globals.screen.copy()
                 game_over = True
-                while game_over:
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            pygame.quit()
-                            exit()
-
-                    action = draw_game_over(globals.screen, globals.Game.score, screenshot)
-
-                    if action == "restart":
-                        game = globals.game.Game2048()  # reset the game
-                        game_over = False       # leave game-over loop
-                        current_window = 0
-                    elif action == "quit":
-                        pygame.quit()
-                        exit()
+                current_window = 3
 
             globals.Game.animate_tile_movement(globals.Game.moves)
 
         # draw your board
         globals.Game.draw_tile_map()
-    if current_window == 2:
+    elif current_window == 2:
         genetic_ai_train_UI()
+
+    elif current_window == 3:
+        # game over
+        if game_over:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    globals.running = False  # allows window to close
+                    pygame.quit()
+                    exit()
+
+            action = draw_game_over(globals.screen, globals.Game.score, screenshot)
+
+            if action == "restart":
+                globals.Game = globals.game.Game2048()  # reset the game
+                game_over = False       # leave game-over loop
+                current_window = 0
+            elif action == "quit":
+                pygame.quit()
+                exit()
+        pass
 
     pygame.display.flip()
     globals.clock.tick(60)  # limit to 60 FPS
