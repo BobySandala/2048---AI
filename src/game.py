@@ -130,7 +130,7 @@ class Game2048:
         moved = np.array([self._move_row_left(row) for row in rotated])
         new_board = np.rot90(moved, direction)
         self.moves = self.calc_moves(self.board, new_board, direction)
-        print("Moves:", self.moves)
+        #print("Moves:", self.moves)
 
         if not np.array_equal(self.board, new_board):
             self.board = new_board

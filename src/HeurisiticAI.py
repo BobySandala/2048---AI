@@ -6,12 +6,12 @@ from src.game import Game2048
 
 class HeuristicAI:
 
-    def __init__(self, game):
+    def __init__(self, game, weights=[2.7, 1.0, 1.0]):
         self.game = game
         self.weights = {
-            'empty_tiles': 2.7,
-            'max_tile_in_corner': 1.0,
-            'monotonicity': 1.0,
+            'empty_tiles': weights[0],
+            'max_tile_in_corner': weights[1],
+            'monotonicity': weights[2],
         }
 
     def max_tile_in_corner(self, board):
