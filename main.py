@@ -6,6 +6,11 @@ import pygame
 if __name__ == "__main__":
     pygame.init()
 
+    # Create the queues here, not in globals.py
+    globals.input_q = globals.Queue()
+    globals.output_q = globals.Queue()
+    globals.queue = globals.Queue()
+    globals.in_q = globals.Queue()
 
     globals.screen = pygame.display.set_mode((500, 600))
     # Build path relative to project root

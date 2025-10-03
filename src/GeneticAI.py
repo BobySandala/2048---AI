@@ -5,6 +5,7 @@ import random
 from . import globals
 from . import read_write_json
 from multiprocessing import Process, Queue
+from queue import Empty   # <-- for multiprocessing.Queue too
 #  [0.7864211  0.57165049 0.33741794]
 
 progress = 0
@@ -20,11 +21,20 @@ class GeneticAI:
         self.total_steps = generations * population_size * number_of_games
         self.current_step = 0
 
-    def fitness(self, weights, queue):
+    def fitness(self, weights, queue, in_q):
         scores = []
         for _ in range(self.number_of_games):  # average over 5 games
             self.current_step += 1
             prog = self.current_step / self.total_steps
+            try:
+                msg = in_q.get(timeout=0.1)  # wait up to 0.1s
+                print(f"MSG: {msg}")
+                if msg == -1:
+                    queue.put({"progress": -2})
+                    return -1
+            except Empty:
+                # no message received in 0.1s
+                pass
             queue.put({"progress": prog})
             Game = Game2048()
             ai = HeuristicAI(Game, weights=weights)
@@ -38,11 +48,17 @@ class GeneticAI:
         return np.mean(scores)
     
 
-    def evolve(self, queue):
+    def evolve(self, queue, in_q):
         best_weights = []
         best_fitness = -1
         for gen in range(self.generations):
-            fitnesses = [self.fitness(weights, queue) for weights in self.population]
+            fitnesses = []
+            for weights in self.population:
+                fit = self.fitness(weights, queue, in_q)
+                if fit == -1:
+                    print("-1 gasit")
+                    return ([0, 0, 0], -1)
+                fitnesses.append(fit)
             ranked = sorted(zip(fitnesses, self.population), reverse=True)
             best = [w for _, w in ranked[:self.population_size // 2]]  # select top half
 
@@ -69,19 +85,17 @@ class GeneticAI:
             weights[i] += np.random.normal(0, 0.1)
         return weights
 
-
-
-def start_genetic_ai(queue, population_size=50, generations=100, games=5):
+def start_genetic_ai(queue, in_q, population_size=50, generations=100, games=5):
     if population_size < 4:
         raise ValueError("Population size must be at least 4.")
     print("Started")
     ga = GeneticAI(population_size=population_size, generations=generations, number_of_games=games)
-    best_weights, best_fitness = ga.evolve(queue)
+    best_weights, best_fitness = ga.evolve(queue, in_q)
     print("Best weights found:", best_weights)
     save_to_json(best_weights)
     queue.put({"progress": -1})
-
-    read_write_json.save_value("best_score_genetic", best_fitness)
+    if best_fitness is not -1:
+        read_write_json.save_value("best_score_genetic", best_fitness)
     return best_weights
 
 def save_to_json(weights):

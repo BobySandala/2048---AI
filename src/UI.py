@@ -92,27 +92,6 @@ def go_to_main_menu():
     current_window = 0
     print("Go to main menu")
 
-def start_train_genetic_ai():
-    global train_ui_stage, p
-    print("Starting Genetic AI training with parameters from input boxes...")
-    if train_ui_stage == 0:
-        try:
-            population_size = int(weight_input_box_1.text)
-            generations = int(weight_input_box_2.text)
-            games = int(weight_input_box_3.text)
-            print(f"Starting training with Population: {population_size}, Generations: {generations}, Games: {games}")
-            #result = GeneticAI.start_genetic_ai(population_size=population_size, generations=generations, number_of_games=games)
-            #GeneticAI.save_to_json(result)
-
-            p = Process(target=GeneticAI.start_genetic_ai, args=(globals.queue, population_size, generations, games))
-            p.start()
-
-            train_ui_stage = 1  # move to next stage
-
-            #print(f"Training complete. Best Weights: {result}")
-            #start_train_btn.text = "Training Complete"
-        except ValueError:
-            print("Please enter valid integers for all fields.")
 
 buttons = [genetic_train_btn, heurisitc_btn, quit_btn]
 train_ai_buttons = [quit_btn, start_train_btn]
@@ -176,17 +155,38 @@ def draw_game_over(screen, score, screenshot):
     pygame.display.flip()
     return None
 
-def genetic_ai_train_UI():
+def start_train_genetic_ai():
+    global train_ui_stage, p
+    print("Starting Genetic AI training with parameters from input boxes...")
+    if train_ui_stage == 0:
+        try:
+            population_size = int(weight_input_box_1.text)
+            generations = int(weight_input_box_2.text)
+            games = int(weight_input_box_3.text)
+            print(f"Starting training with Population: {population_size}, Generations: {generations}, Games: {games}")
+            #result = GeneticAI.start_genetic_ai(population_size=population_size, generations=generations, number_of_games=games)
+            #GeneticAI.save_to_json(result)
+
+            p = Process(target=GeneticAI.start_genetic_ai, args=(globals.queue, globals.in_q, population_size, generations, games))
+            p.start()
+
+            train_ui_stage = 1  # move to next stage
+
+            #print(f"Training complete. Best Weights: {result}")
+            #start_train_btn.text = "Training Complete"
+        except ValueError:
+            print("Please enter valid integers for all fields.")
+
+def genetic_ai_train_UI(events=None):
     global train_ui_stage, train_progress, running, p
     globals.screen.fill((251,249,215))  # background
     if train_ui_stage == 0:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                globals.running = False
-            for btn in train_ai_buttons:
-                btn.handle_event(event)
-            for weight_input_box in weight_input_boxes:
-                weight_input_box.handle_event(event)
+        if events:
+            for event in events:
+                for btn in train_ai_buttons:
+                    btn.handle_event(event)
+                for weight_input_box in weight_input_boxes:
+                    weight_input_box.handle_event(event)
         # draw buttons and input boxes
         for input_box in weight_input_boxes:
             input_box.draw(globals.screen)
@@ -201,9 +201,6 @@ def genetic_ai_train_UI():
         globals.screen.blit(population_text, (50, 220))
         globals.screen.blit(games_text, (50, 290))
     if train_ui_stage == 1:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                globals.running = False
         training_text = globals.font.render("Training in progress...", True, (255, 127, 80))
         globals.screen.blit(training_text, (50, 250))
         if not globals.queue.empty():
@@ -215,13 +212,14 @@ def genetic_ai_train_UI():
             # training finished
             train_ui_stage = 2
             p.join()
+        if train_progress['progress'] == -2:
+            p.join()
 
     if train_ui_stage == 2:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                globals.running = False
-            for btn in after_train_buttons:
-                btn.handle_event(event)
+        if events:
+            for event in events:
+                for btn in after_train_buttons:
+                    btn.handle_event(event)
         # draw buttons
         for btn in after_train_buttons:
             btn.draw(globals.screen)
@@ -235,6 +233,8 @@ def genetic_ai_train_UI():
     pygame.display.flip()
 
 import queue  # standard library queue for Empty exception
+
+
 
 def ai_worker(input_q, output_q):
     w1 = read_write_json.load_value("genetic_ai_weights_w1")
@@ -262,7 +262,6 @@ def ai_worker(input_q, output_q):
         move = ai.get_best_move()
         output_q.put(move)
 
-
 screenshot = None
 game_over = False
 ai_process = None
@@ -276,7 +275,11 @@ def draw_UI():
     for event in events:
         if event.type == pygame.QUIT:
             globals.running = False
-            globals.input_q.put((globals.Game.board, -1))
+            if current_window == 1:
+                globals.input_q.put((globals.Game.board, -1))
+            elif current_window == 2:
+                globals.in_q.put(-1)
+                print("-1 put to in_q")
         if event.type == pygame.KEYDOWN:
             if event.key in globals.key_map:
                 action = globals.key_map[event.key]
@@ -290,7 +293,7 @@ def draw_UI():
             if event:
                 btn.handle_event(event)
 
-    if current_window == 1:
+    elif current_window == 1:
         if ai_process is None or not ai_process.is_alive():
             ai_process = Process(target=ai_worker, args=(globals.input_q, globals.output_q))
             ai_process.start()
@@ -316,13 +319,13 @@ def draw_UI():
         # draw your board
         globals.Game.draw_tile_map()
     elif current_window == 2:
-        genetic_ai_train_UI()
+        genetic_ai_train_UI(events)
 
     elif current_window == 3:
         # game over
         if game_over:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
+            for event_ in events:
+                if event_.type == pygame.QUIT:
                     globals.running = False  # allows window to close
                     pygame.quit()
                     exit()
